@@ -1,0 +1,44 @@
+const passport    = require('passport');
+const bcrypt      = require('bcrypt');
+const LocalStrategy = require('passport-local');
+const ObjectID    = require('mongodb').ObjectID;
+const session     = require('express-session');
+
+module.exports = function (app, db) {
+  
+  //session middleware
+  app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: true,
+    saveUninitialized: true,
+  }));
+  
+  //passport middleware
+  app.use(passport.initialize());
+  app.use(passport.session());
+  
+  passport.use(new LocalStrategy(
+    function(username, password, done) {
+      db.collection('users').findOne({ username: username }, function (err, user) {
+        console.log('User '+ username +' attempted to log in.');
+        if (err) { return done(err); }
+        if (!user) { return done(null, false); }
+        if (!bcrypt.compareSync(password, user.password)) { return done(null, false); }
+        return done(null, user);
+      });
+    }
+  ));
+
+  passport.serializeUser((user, done) => {
+    done(null, user._id);
+  });
+
+  passport.deserializeUser((id, done) => {
+    db.collection('users').findOne(
+      {_id: new ObjectID(id)},
+      (err, doc) => {
+        done(null, doc);
+      }
+    );
+  });
+}
